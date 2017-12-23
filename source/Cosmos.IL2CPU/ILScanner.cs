@@ -1,7 +1,7 @@
 //#define COSMOSDEBUG
 
-using Cosmos.IL2CPU.API;
-using Cosmos.IL2CPU.API.Attribs;
+using IL2CPU.API;
+using IL2CPU.API.Attribs;
 using Cosmos.IL2CPU.Extensions;
 using System;
 using System.Collections.Generic;
@@ -804,18 +804,22 @@ namespace Cosmos.IL2CPU
             MethodBase xInstanceBaseMethod = null;
             MethodBase xInterfaceBaseMethod = null;
 
-            foreach (var xInterface in aCurrentInspectedType.GetInterfaces())
+            Type xCurrentType = aCurrentInspectedType;
+            while (xCurrentType != null)
             {
-                xInterfaceBaseMethod = xInterface
-                    .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                    .SingleOrDefault(method => method.Name == aMethod.Name && method.GetParameters()
-                                                   .Select(param => param.ParameterType)
-                                                   .SequenceEqual(aMethodParams));
-                if (xInterfaceBaseMethod != null)
+                foreach (var xInterface in xCurrentType.GetInterfaces())
                 {
-                    break;
+                    xInterfaceBaseMethod = xInterface
+                        .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                        .SingleOrDefault(method => method.Name == aMethod.Name && method.GetParameters()
+                                                       .Select(param => param.ParameterType)
+                                                       .SequenceEqual(aMethodParams));
+                    if (xInterfaceBaseMethod != null)
+                    {
+                        return xInterfaceBaseMethod;
+                    }
                 }
-
+                xCurrentType = xCurrentType.BaseType;
             }
 
             while (true)
@@ -860,7 +864,7 @@ namespace Cosmos.IL2CPU
                 }
             }
 
-            return (xInstanceBaseMethod ?? xInterfaceBaseMethod) ?? aMethod;
+            return xInstanceBaseMethod ?? aMethod;
         }
 
         protected uint GetMethodUID(MethodBase aMethod, bool aExact)
