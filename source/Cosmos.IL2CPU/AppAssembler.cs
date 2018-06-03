@@ -1,13 +1,6 @@
 //#define VMT_DEBUG
 //#define COSMOSDEBUG
 
-using Cosmos.Build.Common;
-using IL2CPU.Debug.Symbols;
-using IL2CPU.API;
-using IL2CPU.API.Attribs;
-using Cosmos.IL2CPU.Extensions;
-using Cosmos.IL2CPU.ILOpCodes;
-using Cosmos.IL2CPU.X86.IL;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,7 +8,19 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Text;
+#if VMT_DEBUG
 using System.Xml;
+#endif
+
+using Cosmos.Build.Common;
+
+using IL2CPU.API;
+using IL2CPU.API.Attribs;
+using IL2CPU.Debug.Symbols;
+using Cosmos.IL2CPU.Extensions;
+using Cosmos.IL2CPU.ILOpCodes;
+using Cosmos.IL2CPU.X86.IL;
+
 using XSharp;
 using XSharp.Assembler;
 using XSharp.Assembler.x86;
@@ -37,7 +42,7 @@ namespace Cosmos.IL2CPU
         private string mLogDir;
         protected TextWriter mLog;
         protected Dictionary<string, ModuleDefinition> mLoadedModules = new Dictionary<string, ModuleDefinition>();
-        protected DebugInfo.SequencePoint[] mSequences = new DebugInfo.SequencePoint[0];
+        protected DebugInfo.SequencePoint[] mSequences = Array.Empty<DebugInfo.SequencePoint>();
         public TraceAssemblies TraceAssemblies;
         public bool DebugEnabled = false;
         public bool StackCorruptionDetection = false;
@@ -214,14 +219,13 @@ namespace Cosmos.IL2CPU
                     xMethod.LabelStartID = xLabelGuid;
                     xMethod.LabelEndID = mCurrentMethodLabelEndGuid;
                     xMethod.LabelCall = xMethodLabel;
-                    long xAssemblyFileID;
-                    if (DebugInfo.AssemblyGUIDs.TryGetValue(aMethod.MethodBase.DeclaringType.Assembly, out xAssemblyFileID))
+                    if (DebugInfo.AssemblyGUIDs.TryGetValue(aMethod.MethodBase.DeclaringType.Assembly, out var xAssemblyFileID))
                     {
                         xMethod.AssemblyFileID = xAssemblyFileID;
                     }
                     xMethod.DocumentID = DebugInfo.DocumentGUIDs[mSequences[0].Document.ToLower()];
-                    xMethod.LineColStart = ((Int64)mSequences[0].LineStart << 32) + mSequences[0].ColStart;
-                    xMethod.LineColEnd = ((Int64)(mSequences[mSequences.Length - 1].LineEnd) << 32) + mSequences[mSequences.Length - 1].ColEnd;
+                    xMethod.LineColStart = ((long)mSequences[0].LineStart << 32) + mSequences[0].ColStart;
+                    xMethod.LineColEnd = ((long)(mSequences[mSequences.Length - 1].LineEnd) << 32) + mSequences[mSequences.Length - 1].ColEnd;
                     DebugInfo.AddMethod(xMethod);
                 }
             }
@@ -407,7 +411,7 @@ namespace Cosmos.IL2CPU
             }
             XS.Label(xLabelExc + "__2");
             XS.Pop(EBP);
-            var xRetSize = ((int)xTotalArgsSize) - ((int)xReturnSize);
+            var xRetSize = (xTotalArgsSize) - ((int)xReturnSize);
             if (xRetSize < 0)
             {
                 xRetSize = 0;
@@ -523,12 +527,16 @@ namespace Cosmos.IL2CPU
             }
         }
 
+#pragma warning disable CA1822 // Mark members as static
         private void BeforeEmitInstructions(_MethodInfo aMethod, List<ILOpCode> aCurrentGroup)
+#pragma warning restore CA1822 // Mark members as static
         {
             // do optimizations
         }
 
+#pragma warning disable CA1822 // Mark members as static
         private void AfterEmitInstructions(_MethodInfo aMethod, List<ILOpCode> aCurrentGroup)
+#pragma warning restore CA1822 // Mark members as static
         {
             // do optimizations
 
@@ -565,8 +573,7 @@ namespace Cosmos.IL2CPU
                 mLog.Flush();
 
                 //Only emit INT3 as per conditions above...
-                bool INT3Emitted = false;
-                BeforeOp(aMethod, xOpCode, emitINT3, out INT3Emitted, xFirstInstruction);
+                BeforeOp(aMethod, xOpCode, emitINT3, out var INT3Emitted, xFirstInstruction);
                 xFirstInstruction = false;
                 //Emit INT3 on the first non-NOP instruction immediately after a NOP
                 // - This is because TracePoints for NOP are automatically ignored in code called below this
@@ -796,32 +803,32 @@ namespace Cosmos.IL2CPU
             }
         }
 
-        protected void Move(string aDestLabelName, int aValue)
+        protected static void Move(string aDestLabelName, int aValue)
         {
             XS.Set(aDestLabelName, (uint)aValue, destinationIsIndirect: true, size: RegisterSize.Int32);
         }
 
-        protected void Push(uint aValue)
+        protected static void Push(uint aValue)
         {
             XS.Push(aValue);
         }
 
-        protected void Push(string aLabelName, bool isIndirect = false)
+        protected static void Push(string aLabelName, bool isIndirect = false)
         {
             XS.Push(aLabelName, isIndirect: isIndirect);
         }
 
-        protected void Call(MethodBase aMethod)
+        protected static void Call(MethodBase aMethod)
         {
             XS.Call(LabelName.Get(aMethod));
         }
 
-        protected void Jump(string aLabelName)
+        protected static void Jump(string aLabelName)
         {
             XS.Jump(aLabelName);
         }
 
-        protected _FieldInfo ResolveField(_MethodInfo method, string fieldId, bool aOnlyInstance)
+        protected static _FieldInfo ResolveField(_MethodInfo method, string fieldId, bool aOnlyInstance)
         {
             return ILOp.ResolveField(method.MethodBase.DeclaringType, fieldId, aOnlyInstance);
         }
@@ -872,17 +879,12 @@ namespace Cosmos.IL2CPU
             X86.IL.Ldsflda.DoExecute(Assembler, aMethod, DataMember.GetStaticFieldName(aFieldInfo.Field), aMethod.MethodBase.DeclaringType, null);
         }
 
-        protected int GetVTableEntrySize()
-        {
-            return 56; // todo: retrieve from actual type info
-        }
-
-        public byte[] AllocateEmptyVMTArray(int aLength, int aElementSize, uint aArrayTypeID)
+        public static byte[] AllocateEmptyArray(int aLength, int aElementSize, uint aArrayTypeID)
         {
             var xData = new byte[16 + aLength * aElementSize];
             var xTemp = BitConverter.GetBytes(aArrayTypeID);
             Array.Copy(xTemp, 0, xData, 0, 4);
-            xTemp = BitConverter.GetBytes(0x80000002);
+            xTemp = BitConverter.GetBytes((uint)ObjectUtils.InstanceTypeEnum.StaticEmbeddedArray);
             Array.Copy(xTemp, 0, xData, 4, 4);
             xTemp = BitConverter.GetBytes(aLength);
             Array.Copy(xTemp, 0, xData, 8, 4);
@@ -899,7 +901,7 @@ namespace Cosmos.IL2CPU
             XS.Label(InitVMTCodeLabel);
             XS.Push(EBP);
             XS.Set(EBP, ESP);
-            mSequences = new DebugInfo.SequencePoint[0];
+            mSequences = Array.Empty<DebugInfo.SequencePoint>();
 
             var xTypesFieldRef = VTablesImplRefs.VTablesImplDef.GetField("mTypes", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
             string xTheName = DataMember.GetStaticFieldName(xTypesFieldRef);
@@ -915,7 +917,7 @@ namespace Cosmos.IL2CPU
             }
 
             uint xArrayTypeID = aGetTypeID(typeof(Array));
-            byte[] xData = AllocateEmptyVMTArray(aTypesSet.Count, GetVTableEntrySize(), xArrayTypeID);
+            byte[] xData = AllocateEmptyArray(aTypesSet.Count, (int)ILOp.SizeOfType(typeof(VTable)), xArrayTypeID);
             XS.DataMemberBytes(xTheName + "_Contents", xData);
             XS.DataMember(xTheName, 1, "db", "0, 0, 0, 0, 0, 0, 0, 0");
             XS.Set(xTheName, xTheName + "_Contents", destinationIsIndirect: true, destinationDisplacement: 4);
@@ -982,7 +984,7 @@ namespace Cosmos.IL2CPU
                     // Interface Count
                     var xInterfaces = xType.GetInterfaces();
                     Push((uint)xInterfaces.Length);
-                    xData = AllocateEmptyVMTArray(xInterfaces.Length, sizeof(uint), xArrayTypeID);
+                    xData = AllocateEmptyArray(xInterfaces.Length, sizeof(uint), xArrayTypeID);
                     // Interface Indexes Array
                     xDataName = $"____SYSTEM____TYPE___{xTypeName}__InterfaceIndexesArray";
                     XSharp.Assembler.Assembler.CurrentInstance.DataMembers.Add(new DataMember(xDataName, xData));
@@ -990,7 +992,7 @@ namespace Cosmos.IL2CPU
                     Push(0);
 
                     // Method array
-                    xData = AllocateEmptyVMTArray(xEmittedMethods.Count, sizeof(uint), xArrayTypeID);
+                    xData = AllocateEmptyArray(xEmittedMethods.Count, sizeof(uint), xArrayTypeID);
                     // Method Count
                     Push((uint)xEmittedMethods.Count);
                     // Method Indexes Array
@@ -1005,7 +1007,7 @@ namespace Cosmos.IL2CPU
                     Push(0);
 
                     // Interface methods
-                    xData = AllocateEmptyVMTArray(xEmittedInterfaceMethods.Count, sizeof(uint), xArrayTypeID);
+                    xData = AllocateEmptyArray(xEmittedInterfaceMethods.Count, sizeof(uint), xArrayTypeID);
                     // Interface method count
                     Push((uint)xEmittedInterfaceMethods.Count);
                     // Interface method indexes array
@@ -1022,7 +1024,7 @@ namespace Cosmos.IL2CPU
                     // Full type name
                     xDataName = $"____SYSTEM____TYPE___{xTypeName}";
                     int xDataByteCount = Encoding.Unicode.GetByteCount($"{xType.FullName}, {xType.Assembly.FullName}");
-                    xData = AllocateEmptyVMTArray(xDataByteCount, 2, xArrayTypeID);
+                    xData = AllocateEmptyArray(xDataByteCount, 2, xArrayTypeID);
                     XSharp.Assembler.Assembler.CurrentInstance.DataMembers.Add(new DataMember(xDataName, xData));
 
                     Call(VTablesImplRefs.SetTypeInfoRef);
@@ -1075,8 +1077,8 @@ namespace Cosmos.IL2CPU
                     for (int j = 0; j < xEmittedInterfaceMethods.Count; j++)
                     {
                         var xMethod = xEmittedInterfaceMethods.ElementAt(j);
-                        var xInterfaceMethodUID = aGetMethodUID(xMethod.Key);
-                        var xTargetMethodUID = aGetMethodUID(xMethod.Value);
+                        var xInterfaceMethodUID = aGetMethodUID(xMethod.InterfaceMethod);
+                        var xTargetMethodUID = aGetMethodUID(xMethod.TargetMethod);
 #if VMT_DEBUG
                         xVmtDebugOutput.WriteStartElement("InterfaceMethod");
                         xVmtDebugOutput.WriteAttributeString("InterfaceMethodId", xInterfaceMethodUID.ToString());
@@ -1108,7 +1110,7 @@ namespace Cosmos.IL2CPU
             XS.Return();
         }
 
-        private IList<MethodBase> GetEmittedMethods(Type aType, HashSet<MethodBase> aMethodSet)
+        private static IReadOnlyList<MethodBase> GetEmittedMethods(Type aType, HashSet<MethodBase> aMethodSet)
         {
             var xList = new List<MethodBase>();
 
@@ -1123,16 +1125,18 @@ namespace Cosmos.IL2CPU
             return xList;
         }
 
-        private static Dictionary<MethodBase, MethodBase> EmptyEmittedInterfaceMethodsDictionary = new Dictionary<MethodBase, MethodBase>(0);
+        private static readonly List<(MethodBase, MethodBase)> EmptyEmittedInterfaceMethodsList =
+            new List<(MethodBase, MethodBase)>(0);
 
-        private IDictionary<MethodBase, MethodBase> GetEmittedInterfaceMethods(Type aType, HashSet<MethodBase> aMethodSet)
+        private static IReadOnlyList<(MethodBase InterfaceMethod, MethodBase TargetMethod)> GetEmittedInterfaceMethods(
+            Type aType, HashSet<MethodBase> aMethodSet)
         {
             if (aType.IsInterface || aType.IsArray)
             {
-                return EmptyEmittedInterfaceMethodsDictionary;
+                return EmptyEmittedInterfaceMethodsList;
             }
 
-            var xEmittedInterfaceMethods = new Dictionary<MethodBase, MethodBase>();
+            var xEmittedInterfaceMethods = new List<(MethodBase, MethodBase)>();
 
             foreach (var xInterface in aType.GetInterfaces())
             {
@@ -1145,9 +1149,10 @@ namespace Cosmos.IL2CPU
 
                     if (xTargetMethod != null)
                     {
-                        xEmittedInterfaceMethods.Add(
-                            xInterfaceMap.InterfaceMethods[Array.IndexOf(xInterfaceMap.TargetMethods, xTargetMethod)],
-                            xMethod);
+                        var xInterfaceMethodIndex = Array.IndexOf(xInterfaceMap.TargetMethods, xTargetMethod);
+                        var xInterfaceMethod = xInterfaceMap.InterfaceMethods[xInterfaceMethodIndex];
+
+                        xEmittedInterfaceMethods.Add((xInterfaceMethod, xMethod));
                     }
                 }
             }
@@ -1155,41 +1160,11 @@ namespace Cosmos.IL2CPU
             return xEmittedInterfaceMethods;
         }
 
-        public MethodBase GetInterfaceImplementation(Type aType, MethodBase aMethod)
-        {
-            var xParams = aMethod.GetParameters().Select(xParam => xParam.ParameterType).ToArray();
-            var xMethod = aType.GetMethod($"{aMethod.DeclaringType.FullName}.{aMethod.Name}", xParams);
-
-            if (xMethod == null)
-            {
-                // get private implementation
-                xMethod = aType.GetMethod(aMethod.Name, xParams);
-            }
-
-            if (xMethod == null)
-            {
-                try
-                {
-                    var xMap = aType.GetInterfaceMap(aMethod.DeclaringType);
-                    for (int k = 0; k < xMap.InterfaceMethods.Length; k++)
-                    {
-                        if (xMap.InterfaceMethods[k] == aMethod)
-                        {
-                            xMethod = xMap.TargetMethods[k];
-                            break;
-                        }
-                    }
-                }
-                catch
-                {
-                }
-            }
-            return xMethod;
-        }
-
         public void ProcessField(FieldInfo aField)
         {
             string xFieldName = DataMember.GetStaticFieldName(aField);
+            string xFieldContentsName = $"{xFieldName}__Contents";
+
             if (XSharp.Assembler.Assembler.CurrentInstance.DataMembers.Count(x => x.Name == xFieldName) == 0)
             {
                 var xItemList = aField.GetCustomAttributes<ManifestResourceStreamAttribute>(false).ToList();
@@ -1202,7 +1177,7 @@ namespace Cosmos.IL2CPU
                 if (xItem != null)
                 {
                     var xItemType = xItem.GetType();
-                    xManifestResourceName = (string)xItemType.GetField("ResourceName").GetValue(xItem);
+                    xManifestResourceName = (string)xItemType.GetProperty("ResourceName")?.GetValue(xItem);
                 }
                 if (xManifestResourceName != null)
                 {
@@ -1211,29 +1186,38 @@ namespace Cosmos.IL2CPU
                     //                                (xCurrentField.DeclaringType.Assembly.FullName + "__" + xManifestResourceName).Replace(",",
                     //                                                                                                                       "_") + ".res");
                     var xTarget = new StringBuilder();
-                    using (var xStream = aField.DeclaringType.Assembly.GetManifestResourceStream(xManifestResourceName))
+                    byte[] xData;
+                    using (var xStream = aField.DeclaringType?.Assembly.GetManifestResourceStream(xManifestResourceName))
                     {
                         if (xStream == null)
                         {
                             throw new Exception("Resource '" + xManifestResourceName + "' not found!");
                         }
-                        xTarget.Append("0,");
-                        // todo: abstract this array code out.
-                        xTarget.Append((uint)ObjectUtils.InstanceTypeEnum.StaticEmbeddedArray);
-                        xTarget.Append(",");
-                        xTarget.Append((int)xStream.Length);
-                        xTarget.Append(",");
-                        xTarget.Append("1,");
-                        while (xStream.Position < xStream.Length)
-                        {
-                            xTarget.Append(xStream.ReadByte());
-                            xTarget.Append(",");
-                        }
-                        xTarget.Append(",");
+
+                        uint xArrayTypeID = 0;
+                        xData = AllocateEmptyArray((int)xStream.Length, 1, xArrayTypeID);
+                        xStream.Read(xData, 16, (int)xStream.Length);
+
+                        //xTarget.Append("0,");
+                        //xTarget.Append((uint)ObjectUtils.InstanceTypeEnum.StaticEmbeddedArray);
+                        //xTarget.Append(",");
+                        //xTarget.Append((int)xStream.Length);
+                        //xTarget.Append(",");
+                        //xTarget.Append("1,");
+                        //while (xStream.Position < xStream.Length)
+                        //{
+                        //    xTarget.Append(xStream.ReadByte());
+                        //    xTarget.Append(",");
+                        //}
+                        //xTarget.Remove(xTarget.Length - 1, 1);
                     }
 
-                    Assembler.DataMembers.Add(new DataMember($"___{xFieldName}___Contents", "db", xTarget));
-                    Assembler.DataMembers.Add(new DataMember(xFieldName, "dd", $"___{xFieldName}___Contents"));
+                    XS.DataMemberBytes(xFieldContentsName, xData);
+                    XS.DataMember(xFieldName, 1, "dd", "0");
+                    XS.DataMember("", 1, "dd", xFieldContentsName);
+
+                    //Assembler.DataMembers.Add(new DataMember(xFieldContentsName, "db", xTarget.ToString()));
+                    //Assembler.DataMembers.Add(new DataMember(xFieldName, "dd", xFieldContentsName));
                 }
                 else
                 {
@@ -1383,8 +1367,8 @@ namespace Cosmos.IL2CPU
             XS.Label(InitStringIDsLabel);
             XS.Push(EBP);
             XS.Set(EBP, ESP);
-            XS.Set(EAX, ILOp.GetTypeIDLabel(typeof(String)), sourceIsIndirect: true);
-            XS.Set(DataMember.GetStaticFieldName(typeof(String).GetField("Empty", BindingFlags.Static | BindingFlags.Public)),
+            XS.Set(EAX, ILOp.GetTypeIDLabel(typeof(string)), sourceIsIndirect: true);
+            XS.Set(DataMember.GetStaticFieldName(typeof(string).GetField("Empty", BindingFlags.Static | BindingFlags.Public)),
                 LdStr.GetContentsArrayName(""), destinationDisplacement: 4);
 
             var xMemberId = 0;
@@ -1451,7 +1435,9 @@ namespace Cosmos.IL2CPU
             }
         }
 
+#pragma warning disable CA1822 // Mark members as static
         protected void AfterOp(_MethodInfo aMethod, ILOpCode aOpCode)
+#pragma warning restore CA1822 // Mark members as static
         {
         }
 
@@ -1501,8 +1487,8 @@ namespace Cosmos.IL2CPU
             }
             DebugInfo.AddSymbols(mSymbols, false);
 
-            bool INT3PlaceholderEmitted = false;
-            EmitTracer(aMethod, aOpCode, aMethod.MethodBase.DeclaringType.Namespace, emitInt3NotNop, out INT3Emitted, out INT3PlaceholderEmitted, hasSourcePoint);
+            EmitTracer(aMethod, aOpCode, aMethod.MethodBase.DeclaringType.Namespace, emitInt3NotNop,
+                out INT3Emitted, out var INT3PlaceholderEmitted, hasSourcePoint);
 
             if (INT3Emitted || INT3PlaceholderEmitted)
             {
