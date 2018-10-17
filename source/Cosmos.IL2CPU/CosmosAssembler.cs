@@ -230,7 +230,7 @@ namespace Cosmos.IL2CPU
 
             DataMembers.Add(new DataIfNotDefined("ELF_COMPILATION"));
             DataMembers.Add(new DataMember("MultibootSignature", new uint[] { xSig }));
-            uint xFlags = 0x10003;
+            uint xFlags = 0x10007;
             DataMembers.Add(new DataMember("MultibootFlags", xFlags));
             DataMembers.Add(new DataMember("MultibootChecksum", (int)(0 - (xFlags + xSig))));
             DataMembers.Add(new DataMember("MultibootHeaderAddr", ElementReference.New("MultibootSignature")));
@@ -238,19 +238,24 @@ namespace Cosmos.IL2CPU
             DataMembers.Add(new DataMember("MultibootLoadEndAddr", ElementReference.New("_end_code")));
             DataMembers.Add(new DataMember("MultibootBSSEndAddr", ElementReference.New("_end_code")));
             DataMembers.Add(new DataMember("MultibootEntryAddr", ElementReference.New("Kernel_Start")));
+            DataMembers.Add(new DataMember("", 0));
+            DataMembers.Add(new DataMember("", 800, 600, 32));
             DataMembers.Add(new DataEndIfDefined());
 
             DataMembers.Add(new DataIfDefined("ELF_COMPILATION"));
-            xFlags = 0x00003;
+            xFlags = 0x00007;
             DataMembers.Add(new DataMember("MultibootSignature", new uint[] { xSig }));
             DataMembers.Add(new DataMember("MultibootFlags", xFlags));
             DataMembers.Add(new DataMember("MultibootChecksum", (int)(0 - (xFlags + xSig))));
+            DataMembers.Add(new DataMember("", 0, 0, 0, 0, 0));
+            DataMembers.Add(new DataMember("", 0));
+            DataMembers.Add(new DataMember("", 800, 600, 32));
             DataMembers.Add(new DataEndIfDefined());
 
             // graphics info fields
-            DataMembers.Add(new DataMember("MultibootGraphicsRuntime_VbeModeInfoAddr", Int32.MaxValue));
-            DataMembers.Add(new DataMember("MultibootGraphicsRuntime_VbeControlInfoAddr", Int32.MaxValue));
-            DataMembers.Add(new DataMember("MultibootGraphicsRuntime_VbeMode", Int32.MaxValue));
+            DataMembers.Add(new DataMember("MultibootGraphicsRuntime_VbeModeInfoAddr", 1 << 2));
+            DataMembers.Add(new DataMember("MultibootGraphicsRuntime_VbeControlInfoAddr", 1 << 0));
+            DataMembers.Add(new DataMember("MultibootGraphicsRuntime_VbeMode", 0));
 
             // memory
             DataMembers.Add(new DataMember("MultiBootInfo_Memory_High", 0));
@@ -327,16 +332,15 @@ namespace Cosmos.IL2CPU
 
             WriteDebugVideo("Creating IDT.");
             CreateIDT();
-#if LFB_1024_8
+            
             new Comment("Set graphics fields");
-            XS.Mov(XSRegisters.EBX, XSharp.Assembler.ElementReference.New("MultiBootInfo_Structure"), sourceIsIndirect: true);
-            XS.Mov(XSRegisters.EAX, XSRegisters.EBX, sourceDisplacement: 72);
-            new Move { DestinationRef = XSharp.Assembler.ElementReference.New("MultibootGraphicsRuntime_VbeControlInfoAddr"), DestinationIsIndirect = true, SourceReg = Registers.EAX };
-            XS.Mov(XSRegisters.EAX, XSRegisters.EBX, sourceDisplacement: 76);
-            new Move { DestinationRef = XSharp.Assembler.ElementReference.New("MultibootGraphicsRuntime_VbeModeInfoAddr"), DestinationIsIndirect = true, SourceReg = Registers.EAX };
-            XS.Mov(XSRegisters.EAX, XSRegisters.EBX, sourceDisplacement: 80);
-            new Move { DestinationRef = XSharp.Assembler.ElementReference.New("MultibootGraphicsRuntime_VbeMode"), DestinationIsIndirect = true, SourceReg = Registers.EAX };
-#endif
+            new Mov { DestinationReg = XSRegisters.EBX, SourceRef = ElementReference.New("MultiBootInfo_Structure"), SourceIsIndirect = true };
+            new Mov { DestinationReg = XSRegisters.EAX, SourceReg = XSRegisters.EBX, SourceIsIndirect = true, SourceDisplacement = 72 };
+            new Mov { DestinationRef = ElementReference.New("MultibootGraphicsRuntime_VbeControlInfoAddr"), DestinationIsIndirect = true, SourceReg = XSRegisters.EAX };
+            new Mov { DestinationReg = XSRegisters.EAX, SourceReg = XSRegisters.EBX, SourceIsIndirect = true, SourceDisplacement = 76 };
+            new Mov { DestinationRef = ElementReference.New("MultibootGraphicsRuntime_VbeModeInfoAddr"), DestinationIsIndirect = true, SourceReg = XSRegisters.EAX };
+            new Mov { DestinationReg = XSRegisters.EAX, SourceReg = XSRegisters.EBX, SourceIsIndirect = true, SourceDisplacement = 80 };
+            new Mov { DestinationRef = ElementReference.New("MultibootGraphicsRuntime_VbeMode"), DestinationIsIndirect = true, SourceReg = XSRegisters.EAX };
 
             //WriteDebugVideo("Initializing SSE.");
             //new Comment(this, "BEGIN - SSE Init");
