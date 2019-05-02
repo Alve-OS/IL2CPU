@@ -1,7 +1,10 @@
 <Project>
 
     <ItemGroup>
-        <PackageReference Update="@(RoslynAnalyzer)" Version="$(RoslynAnalyzersVersion)" />
+        <PackageReference Update="Microsoft.NET.Test.Sdk" Version="$(MicrosoftNETTestSdkVersion)" />
+        <PackageReference Update="Moq" Version="$(MoqVersion)" />
+        <PackageReference Update="NUnit" Version="$(NUnitVersion)" />
+        <PackageReference Update="NUnit3TestAdapter" Version="$(NUnit3TestAdapterVersion)" />
     </ItemGroup>
 
 </Project>
