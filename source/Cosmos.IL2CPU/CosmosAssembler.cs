@@ -249,7 +249,7 @@ namespace Cosmos.IL2CPU
             DataMembers.Add(new DataMember("MultibootChecksum", (int)(0 - (xFlags + xSig))));
             DataMembers.Add(new DataMember("", 0, 0, 0, 0, 0));
             DataMembers.Add(new DataMember("", 0));
-            DataMembers.Add(new DataMember("", 800, 600, 32));
+            DataMembers.Add(new DataMember("", 1920, 1080, 32));
             DataMembers.Add(new DataEndIfDefined());
 
             // graphics info fields
